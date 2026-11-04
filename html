@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <style>
+    body { font-family: sans-serif; background: #f0f2f5; padding: 20px; }
+    .box { max-width: 650px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+    
+    .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+    .header-area h2 { margin: 0; font-size: 20px; }
+    
+    .header-controls { display: flex; align-items: center; gap: 8px; }
+    .history-select { padding: 6px 10px; border-radius: 16px; border: 1px solid #ccc; font-size: 12px; background: #fff; cursor: pointer; max-width: 180px; text-overflow: ellipsis; }
+    
+    .btn-small { background: #f0f2f5; color: #333; border: 1px solid #ccc; padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+    .btn-small:hover { background: #e4e6eb; color: #111; }
+    .btn-new { background: #007fff; color: white; border: none; }
+    .btn-new:hover { background: #0066cc; color: white; }
+
+    textarea { width: 100%; height: 80px; margin-bottom: 15px; box-sizing: border-box; padding: 10px; font-size: 14px; }
+    .file-input-area { margin-bottom: 15px; padding: 15px; background: #f8f9fa; border: 1px dashed #ccc; border-radius: 4px; text-align: center; }
+    #preview { max-width: 100%; max-height: 200px; display: none; margin-top: 10px; border-radius: 4px; margin-left: auto; margin-right: auto; }
+    button#sendBtn { width: 100%; padding: 12px; background: #007fff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; font-weight: bold; margin-bottom: 10px; }
+    button#sendBtn:disabled { background: #ccc; }
+    
+    .chat-timeline { display: flex; flex-direction: column; gap: 15px; margin-top: 10px; }
+
+    .user-row { display: flex; flex-direction: column; align-items: flex-end; width: 100%; }
+    .user-bubble { background: #e3e3e3; color: #111; padding: 12px 16px; border-radius: 16px 16px 2px 16px; font-size: 14px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; }
+    .user-label { font-size: 11px; color: #666; font-weight: bold; margin-bottom: 3px; padding-right: 4px; }
+
+    .ai-row { display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
+    .ai-label { font-size: 11px; color: #007fff; font-weight: bold; margin-bottom: 3px; padding-left: 4px; }
+    .reply { padding: 15px; background: #f4f4f6; border: 1px solid #e5e5e7; border-radius: 16px 16px 16px 2px; line-height: 1.6; font-size: 14px; max-width: 90%; width: 100%; box-sizing: border-box; }
+    
+    .reply h3, .reply h2 {
+      font-size: 17px;
+      font-weight: bold;
+      color: #111;
+      margin-top: 16px;
+      margin-bottom: 8px;
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 4px;
+    }
+    .reply h3:first-child, .reply h2:first-child { margin-top: 0; }
+    .reply p { margin-bottom: 10px; }
+    .reply p:last-child { margin-bottom: 0; }
+    .reply strong { font-weight: bold; color: #000; background: linear-gradient(transparent 60%, #fff3b3 60%); }
+    .loading-status { font-size: 14px; color: #666; font-style: italic; margin-top: 5px; display: none; }
+  </style>
+</head>
+<body>
+
+<div class="box">
+  <div class="header-area">
+    <h2>Jamini</h2>
+    <div class="header-controls">
+      <select id="historySelect" class="history-select" onchange="switchChat(this.value)"></select>
+      <button class="btn-small btn-new" onclick="startNewChat()">＋ 新しい会話</button>
+      <button class="btn-small" onclick="deleteCurrentChat()">🗑️ 削除</button>
+    </div>
+  </div>
+  <p style="color: #666; font-size: 14px;">教科書やノートの写真を送って質問してね！</p>
+  
+  <div class="chat-timeline" id="chatTimeline"></div>
+  <div id="loadingStatus" class="loading-status">思考中... ⏳</div>
+  <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
+
+  <div class="file-input-area">
+    <label for="imageFile" style="cursor: pointer; color: #007fff; font-weight: bold; display: block; padding: 10px;">[ 📷 写真を選択・撮影する ]</label>
+    <input type="file" id="imageFile" accept="image/*" style="display: none;" onchange="previewImage()">
+    <img id="preview" alt="選択された画像プレビュー">
+  </div>
+
+  <textarea id="input" placeholder="質問を入力してね（前の質問の続きでもOK！）"></textarea>
+  <button id="sendBtn" onclick="submit()">先生に質問する</button>
+</div>
+
+<script>
+  var memoryHistory = [];
+  var currentChatId = null;
+  var allChats = {};
+
+  window.onload = function() {
+    loadAllChatsFromStorage();
+  };
+
+  function loadAllChatsFromStorage() {
+    var saved = localStorage.getItem("jamini_chats");
+    if (saved) {
+      try { allChats = JSON.parse(saved); } catch(e) { allChats = {}; }
+    }
+    
+    var keys = Object.keys(allChats);
+    if (keys.length === 0) {
+      createNewChatSession();
+    } else {
+      currentChatId = keys[keys.length - 1];
+      updateHistoryDropdown();
+      renderCurrentChat();
+    }
+  }
+
+  function saveAllChatsToStorage() {
+    localStorage.setItem("jamini_chats", JSON.stringify(allChats));
+  }
+
+  function createNewChatSession() {
+    currentChatId = "chat_" + Date.now();
+    allChats[currentChatId] = {
+      title: "新しい会話",
+      memoryHistory: [],
+      htmlContent: ""
+    };
+    saveAllChatsToStorage();
+    updateHistoryDropdown();
+    renderCurrentChat();
+  }
+
+  function startNewChat() {
+    createNewChatSession();
+  }
+
+  function switchChat(chatId) {
+    if (!allChats[chatId]) return;
+    currentChatId = chatId;
+    renderCurrentChat();
+  }
+
+  function renderCurrentChat() {
+    var chatData = allChats[currentChatId];
+    if (!chatData) return;
+
+    memoryHistory = chatData.memoryHistory || [];
+    var timeline = document.getElementById("chatTimeline");
+    timeline.innerHTML = chatData.htmlContent || "";
+
+    renderMathInElement(timeline, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false},
+        {left: '\\(', right: '\\)', display: false},
+        {left: '\\[', right: '\\]', display: true}
+      ],
+      throwOnError: false
+    });
+
+    document.getElementById("historySelect").value = currentChatId;
+  }
+
+  function updateHistoryDropdown() {
+    var select = document.getElementById("historySelect");
+    select.innerHTML = "";
+    
+    var keys = Object.keys(allChats);
+    keys.forEach(function(key) {
+      var option = document.createElement("option");
+      option.value = key;
+      option.innerText = allChats[key].title || "会話";
+      select.appendChild(option);
+    });
+    
+    if (currentChatId) {
+      select.value = currentChatId;
+    }
+  }
+
+  function deleteCurrentChat() {
+    if (confirm("この会話を削除してもよろしいですか？")) {
+      delete allChats[currentChatId];
+      saveAllChatsToStorage();
+      loadAllChatsFromStorage();
+    }
+  }
+
+  function previewImage() {
+    var fileInput = document.getElementById("imageFile");
+    var preview = document.getElementById("preview");
+    
+    if (fileInput.files && fileInput.files[0]) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        preview.src = e.target.result;
+        preview.style.display = "block";
+      }
+      reader.readAsDataURL(fileInput.files[0]);
+    }
+  }
+
+  function clearImageSelection() {
+    document.getElementById("imageFile").value = "";
+    var preview = document.getElementById("preview");
+    preview.src = "";
+    preview.style.display = "none";
+  }
+
+  function toHalfWidth(str) {
+    if (!str) return "";
+    return str.replace(/[Ａ-Ｚａ-ｚ０-９＋ー＊／＝]/g, function(s) {
+      return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+    }).replace(/＋/g, "+").replace(/ー/g, "-").replace(/＝/g, "=");
+  }
+
+  function submit() {
+    var inputElem = document.getElementById("input");
+    var rawTxt = inputElem.value;
+    
+    var txt = rawTxt ? toHalfWidth(rawTxt.trim()) : "";
+    var fileInput = document.getElementById("imageFile");
+    var sendBtn = document.getElementById("sendBtn");
+    var loadingStatus = document.getElementById("loadingStatus");
+    var timeline = document.getElementById("chatTimeline");
+    
+    if (!txt && (!fileInput.files || !fileInput.files[0])) return;
+
+    inputElem.value = "";
+
+    loadingStatus.style.display = "block";
+    sendBtn.disabled = true;
+
+    var userRow = document.createElement("div");
+    userRow.className = "user-row";
+    userRow.innerHTML = '<div class="user-label">あなた</div><div class="user-bubble">' + (txt ? escapeHtml(txt) : "[画像の問題を送信しました]") + '</div>';
+    timeline.appendChild(userRow);
+
+    // 💡 バックエンドへ送るテキストを綺麗に整形
+    var sendTextForHistory = txt ? txt : "[添付された画像の問題]";
+    memoryHistory.push({ role: "user", text: sendTextForHistory });
+
+    if (allChats[currentChatId] && allChats[currentChatId].title === "新しい会話") {
+      var firstText = txt ? txt : "画像による質問";
+      allChats[currentChatId].title = firstText.length > 10 ? firstText.substring(0, 10) + "..." : firstText;
+      updateHistoryDropdown();
+    }
+
+    if (fileInput.files && fileInput.files[0]) {
+      var file = fileInput.files[0];
+      var reader = new FileReader();
+      
+      reader.onload = function(e) {
+        var rawData = e.target.result.split(",");
+        var imageQuery = {
+          mimeType: file.type,
+          base64: rawData[1]
+        };
+        clearImageSelection();
+        callGAS(txt, imageQuery);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      callGAS(txt, null);
+    }
+  }
+
+  function callGAS(txt, imageQuery) {
+    var sendBtn = document.getElementById("sendBtn");
+    var loadingStatus = document.getElementById("loadingStatus");
+    var timeline = document.getElementById("chatTimeline");
+
+    // 💡 確実に最新の memoryHistory を複製して送信
+    var sendHistory = JSON.parse(JSON.stringify(memoryHistory.slice(0, -1)));
+
+    google.script.run
+      .withSuccessHandler(function(ans) {
+        loadingStatus.style.display = "none";
+        sendBtn.disabled = false;
+        
+        var aiRow = document.createElement("div");
+        aiRow.className = "ai-row";
+        
+        var aiLabel = document.createElement("div");
+        aiLabel.className = "ai-label";
+        aiLabel.innerText = "Jamini";
+        
+        var aiBubble = document.createElement("div");
+        aiBubble.className = "reply";
+        aiBubble.innerHTML = formatResponse(ans);
+        
+        aiRow.appendChild(aiLabel);
+        aiRow.appendChild(aiBubble);
+        timeline.appendChild(aiRow);
+
+        renderMathInElement(aiBubble, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false},
+            {left: '\\(', right: '\\)', display: false},
+            {left: '\\[', right: '\\]', display: true}
+          ],
+          throwOnError: false
+        });
+
+        memoryHistory.push({ role: "model", text: ans });
+
+        if (allChats[currentChatId]) {
+          allChats[currentChatId].memoryHistory = memoryHistory;
+          allChats[currentChatId].htmlContent = timeline.innerHTML;
+          saveAllChatsToStorage();
+        }
+      })
+      .withFailureHandler(function(err) {
+        loadingStatus.style.display = "none";
+        sendBtn.disabled = false;
+        
+        var errorRow = document.createElement("div");
+        errorRow.className = "ai-row";
+        errorRow.innerHTML = '<div class="ai-label">Jamini</div><div class="reply" style="color:red;">エラーが発生しました: ' + err.message + '</div>';
+        timeline.appendChild(errorRow);
+      })
+      .askAI(txt, imageQuery, sendHistory);
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
+  function formatResponse(text) {
+    if (!text) return "";
+    
+    var formattedText = text
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<strong>$1</strong>");
+
+    var lines = formattedText.split("\n");
+    var htmlResult = "";
+    
+    lines.forEach(function(line) {
+      var trimmed = line.trim();
+      
+      if (trimmed.indexOf("###") === 0) {
+        var headingText = trimmed.replace(/^###\s*/, "");
+        htmlResult += "<h3>" + headingText + "</h3>";
+      } else if (trimmed.indexOf("##") === 0) {
+        var headingText = trimmed.replace(/^##\s*/, "");
+        htmlResult += "<h3>" + headingText + "</h3>";
+      } else if (trimmed.indexOf("#") === 0) {
+        var headingText = trimmed.replace(/^#\s*/, "");
+        htmlResult += "<h3>" + headingText + "</h3>";
+      } 
+      else if (trimmed === "") {
+        // 何もしない
+      } 
+      else {
+        htmlResult += "<p>" + line + "</p>";
+      }
+    });
+    
+    return htmlResult;
+  }
+</script>
+
+</body>
+</html>
