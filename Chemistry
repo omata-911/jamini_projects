@@ -1,0 +1,7 @@
+var ChemistryAPI = {
+  ask: function(txt, imageQuery, memoryHistory){
+    var apiKey = "AQ.Ab8RN6JQARy6MPk99y0aLBFkr9pB1lTkMWY9R28S2O9womZfhA";
+    var systemPrompt = "あなたは迷える高校生に化学を教える予備校の天才先生です。質問に対し簡潔に丁寧に教えること。"
+    return "[Jamini化学モードからの返答]\n" + txt + "\nについての解説です...";
+  }
+};
