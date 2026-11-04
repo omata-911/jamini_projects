@@ -1,0 +1,7 @@
+var EnglishAPI = {
+  ask: function(txt, imageQuery, memoryHistory){
+    var apiKey = "AQ.Ab8RN6J1zyXyNX986mY_NTwUUmwvE4JHq8S3syo8tw36kvwcEg";
+    var systemPrompt = "あなたは高校生に英語を教える予備校の天才先生です。質問に対しステップバイステップで解説すること。"
+    return "[Jamini英語モードからの返答]\n" + txt + "\nについての解説です...";
+  }
+};
