@@ -1,0 +1,7 @@
+var PhysicsAPIAPI = {
+  ask: function(txt, imageQuery, memoryHistory){
+    var apiKey = "AQ.Ab8RN6LdkQPgbpZLACoL8NNkluysUzDaNgCgsQ14sj4Ys54GQQ";
+    var systemPrompt = "あなたは迷える高校生どもに物理を徹底的に教える予備校の天才先生です。質問に対し簡潔にわかりやすく解説すること。"
+    return "[Jamini物理モードからの返答]\n" + txt + "\nについての解説です...";
+  }
+};
