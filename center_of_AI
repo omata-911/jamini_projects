@@ -1,0 +1,97 @@
+// @ts-nocheck
+function doGet() {
+  // ※前回「marked.js」を内部化した場合は createTemplateFromFile('index').evaluate() にしてください
+  return HtmlService.createTemplateFromFile('index').evaluate()
+      .setTitle('校内AI質問箱')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// 💡 1. フロントエンド（index.html）から呼ばれる「教科ごとの振り分け」関数
+function askAI(question, imageQuery, chatHistory, subject) {
+  switch(subject) {
+    case 'math':      return MathAPI.ask(question, imageQuery, chatHistory);
+    case 'physics':   return PhysicsAPI.ask(question, imageQuery, chatHistory);
+    case 'chemistry': return ChemistryAPI.ask(question, imageQuery, chatHistory);
+    case 'english':   return EnglishAPI.ask(question, imageQuery, chatHistory);
+    case 'classic':   return ClassicAPI.ask(question, imageQuery, chatHistory);
+    default:          return "エラー: 不明な教科が選択されました。";
+  }
+}
+
+// 💡 2. 共通のGemini API通信処理（もともとのコードを汎用化してここにまとめます）
+function callGeminiAPI(question, imageQuery, chatHistory, apiKey, systemInstructionText) {
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
+  let contents = [];
+  
+  // 過去の履歴を変換
+  if (chatHistory && Array.isArray(chatHistory) && chatHistory.length > 0) {
+    chatHistory.forEach(function(msg) {
+      if (msg && msg.role && msg.text) {
+        contents.push({
+          "role": msg.role === "user" ? "user" : "model",
+          "parts": [{ "text": String(msg.text) }]
+        });
+      }
+    });
+  }
+  
+  // 今回の新しい質問
+  let currentText = (question && typeof question === "string") ? question.trim() : "";
+  let currentParts = [];
+  
+  if (currentText !== "") {
+    currentParts.push({ "text": currentText });
+  } else if (imageQuery && imageQuery.base64) {
+    currentParts.push({ "text": "添付された画像の問題を解いて、解説してください。" });
+  }
+  
+  if (imageQuery && imageQuery.base64 && imageQuery.mimeType) {
+    currentParts.push({
+      "inlineData": {
+        "mimeType": imageQuery.mimeType,
+        "data": imageQuery.base64
+      }
+    });
+  }
+  
+  // 履歴の最後に「今回の質問」を結合
+  contents.push({
+    "role": "user",
+    "parts": currentParts
+  });
+
+  const payload = {
+    "contents": contents,
+    // 💡 教科ファイルから渡された「専用の指示文」をセット
+    "systemInstruction": {
+      "parts": [{ "text": systemInstructionText }]
+    }
+  };
+
+  const options = {
+    "method": "post",
+    "contentType": "application/json",
+    "payload": JSON.stringify(payload),
+    "muteHttpExceptions": true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const responseCode = response.getResponseCode();
+    const resText = response.getContentText();
+    const json = JSON.parse(resText);
+    
+    if (responseCode !== 200) {
+      if (json.error) return "AIエラー: " + json.error.message;
+      return "通信エラー (コード: " + responseCode + ")";
+    }
+    
+    if (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts[0].text) {
+      return json.candidates[0].content.parts[0].text;
+    } else {
+      return "AIからの応答の形が違います。";
+    }
+  } catch (e) {
+    return "エラーが発生しました: " + e.toString();
+  }
+}
