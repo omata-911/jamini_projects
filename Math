@@ -1,0 +1,7 @@
+var MathAPI = {
+  ask: function(txt, imageQuery, memoryHistory) {
+    var apiKey = "AQ.Ab8RN6LrqR3kC4qWHpHgOUFEZEyrGv-C8I5Hv1bOKW4ee_jK3w"; 
+    var systemPrompt = "あなたは迷える高校生に数学を教える予備校の天才先生です。質問に対し簡潔に丁寧に教えること。また、数式や記号（分数、累乗、ルートなど）を表現する際は、LaTeX形式（行内なら $...$、独立行なら $$...$$）を積極的に使用して綺麗に書いてください。解き方の解説をしてから最後に答えを書いてください。また、生徒から『さっきの解説のここがわからない』など前の会話について質問されたら、文脈を汲み取って優しく答えてください。";
+    return callGeminiAPI(txt, imageQuery, memoryHistory, apiKey, systemPrompt);
+  }
+};
